@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant UI - Task 2</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .chat-container { width: 100%; max-width: 600px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; }
+        .chat-box { height: 350px; border: 1px solid #ddd; border-radius: 4px; overflow-y: scroll; padding: 10px; margin-bottom: 15px; background: #fafafa; }
+        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 6px; line-height: 1.4; }
+        .user-message { background: #007bff; color: white; text-align: right; margin-left: 20%; }
+        .bot-message { background: #e9ecef; color: #333; margin-right: 20%; }
+        .input-group { display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #218838; }
+        .options { margin-bottom: 10px; font-size: 14px; color: #555; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <h2>Task 2 AI Assistant</h2>
+    <div class="options">
+        <label><input type="checkbox" id="useToolToggle"> Enable Simulated Tool</label>
+    </div>
+    <div class="chat-box" id="chatBox">
+        <div class="message bot-message">Hello! Type a message below to query your RAG backend.</div>
+    </div>
+    <div class="input-group">
+        <input type="text" id="userInput" placeholder="Ask something..." autocomplete="off">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    async function sendMessage() {
+        const inputField = document.getElementById("userInput");
+        const chatBox = document.getElementById("chatBox");
+        const useTool = document.getElementById("useToolToggle").checked;
+        const promptText = inputField.value.trim();
+
+        if (!promptText) return;
+
+        // Append user message
+        chatBox.innerHTML += `<div class="message user-message">${escapeHtml(promptText)}</div>`;
+        inputField.value = "";
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        try {
+            // Adjust URL if backend runs on a different port or host (e.g., Docker service name)
+            const response = await fetch("http://localhost:8000/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: promptText, use_tool: useTool })
+            });
+
+            const data = await response.json();
+            
+            let botReply = data.response;
+            if (data.tool_output) {
+                botReply += `<br><small style="color: #007bff;"><b>[Tool Output]:</b> ${escapeHtml(data.tool_output)}</small>`;
+            }
+
+            chatBox.innerHTML += `<div class="message bot-message">${botReply}</div>`;
+        } catch (error) {
+            chatBox.innerHTML += `<div class="message bot-message" style="color: red;">Error connecting to backend server.</div>`;
+        }
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Allow pressing Enter to send
+    document.getElementById("userInput").addEventListener("keypress", function(e) {
+        if (e.key === 'Enter') sendMessage();
+    });
+</script>
+
+</body>
+</html>

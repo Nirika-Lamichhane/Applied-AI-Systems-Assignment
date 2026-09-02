@@ -1,0 +1,3 @@
+The AI Fellowship project involves building a Retrieval-Augmented Generation (RAG) system using FastAPI, ChromaDB, and Docker. 
+Task 1 focuses on backend containerization, local vector embedding, and tool execution. 
+Task 2 implements a web user interface and orchestrates multi-container services using Docker Compose.

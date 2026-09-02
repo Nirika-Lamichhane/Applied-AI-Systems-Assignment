@@ -1,0 +1,17 @@
+# Python virtual environment
+venv/
+ENV/
+env/
+
+# Python compiled bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ChromaDB local storage or persistent data
+.chroma/
+chroma_data/
+
+# Docker container logs or temp files
+*.log
+.DS_Store
