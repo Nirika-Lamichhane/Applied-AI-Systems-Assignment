@@ -9,6 +9,13 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from tenacity import retry, stop_after_attempt, wait_exponential
 import google.generativeai as genai
+import os
+from dotenv import load_dotenv
+
+# Explicitly look for the .env file one folder up (in the root directory) or locally
+load_dotenv() 
+# Alternatively, if it's strictly in the root directory relative to backend:
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../.env"))
 
 # Initialize Rate Limiter (Task 2 Reliability Requirement)
 limiter = Limiter(key_func=get_remote_address)
@@ -84,7 +91,7 @@ def execute_llm_generation(prompt: str, context: str, temperature: float, top_p:
     
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-3.6-flash")
         
         system_instruction = "You are a precise production-ready AI assistant. Answer the user prompt accurately using only the provided context."
         full_prompt = f"{system_instruction}\n\nContext:\n{context}\n\nQuestion:\n{prompt}"
@@ -137,7 +144,7 @@ async def chat_endpoint(request: Request, body: QueryRequest):
             structured_metadata={
                 "temperature": body.temperature,
                 "top_p": body.top_p,
-                "model_used": "gemini-1.5-flash (or fallback)",
+                "model_used": "gemini-3.6-flash (or fallback)",
                 "rag_chunks_found": len(retrieved_chunks)
             }
         )
