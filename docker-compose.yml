@@ -6,6 +6,10 @@ services:
     container_name: task1_backend_service
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+    env_file:
+      - .env
     restart: always
 
   frontend:
