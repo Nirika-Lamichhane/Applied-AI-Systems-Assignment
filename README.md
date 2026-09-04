@@ -163,7 +163,52 @@ This ensures that the API remains responsive even when external dependencies are
 ## Project Structure
 
 ```text
-
+Nirika_Wk15 assignment/
+│
+├── backend/
+│   ├── __pycache__/
+│   │
+│   ├── data/
+│   │   └── # Backend data / vector store files
+│   │
+│   ├── Dockerfile
+│   │   ├── # Backend container configuration
+│   │
+│   ├── main.py
+│   │   ├── # FastAPI application, RAG pipeline,
+│   │   ├── # tool calling, and API endpoints
+│   │
+│   ├── requirements.txt
+│   │   └── # Backend Python dependencies
+│   │
+│   └── utils.py
+│       └── # Utility and helper functions
+│
+├── frontend/
+│   ├── Dockerfile
+│   │   └── # Frontend container configuration
+│   │
+│   └── index.html
+│       └── # Frontend web interface
+│
+├── venv/
+│   ├── Include/
+│   ├── Lib/
+│   ├── Scripts/
+│   └── pyvenv.cfg
+│       └── # Python virtual environment
+│
+├── .env
+│   └── # Environment variables and API configuration
+│
+├── .gitignore
+│   └── # Files and directories excluded from Git
+│
+├── docker-compose.yml
+│   └── # Multi-container service orchestration
+│
+└── README.md
+    └── # Project documentation
 
 ---
 
