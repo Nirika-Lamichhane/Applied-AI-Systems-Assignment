@@ -16,3 +16,13 @@ chroma_data/
 # Docker container logs or temp files
 *.log
 .DS_Store
+
+# uv virtual environment
+.venv/
+
+# MLflow experiment tracking
+mlruns/
+mlflow.db
+
+# Evidently AI reports
+*.html

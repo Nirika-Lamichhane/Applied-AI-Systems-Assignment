@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 import os
+import time
 import chromadb
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,11 +11,20 @@ from slowapi.errors import RateLimitExceeded
 from tenacity import retry, stop_after_attempt, wait_exponential
 import google.generativeai as genai
 from dotenv import load_dotenv
+import mlflow
 
-# Import the new tool we just made
 from utils import mock_web_search 
 
 load_dotenv() 
+
+# ----------------------------------------------------
+# MLflow Experiment Configuration (Track B)
+# ----------------------------------------------------
+mlflow.set_tracking_uri("sqlite:///mlflow.db")
+mlflow.set_experiment("W17_TrackB_Agentic_Assistant")
+
+# Track prompt configuration versions (e.g. v1, v2, v3)
+PROMPT_VERSION = "v1"
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Production AI Assistant Backend", version="2.1")
@@ -81,7 +91,7 @@ def execute_llm_generation(prompt: str, context: str, temperature: float, top_p:
     
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-3.6-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         
         full_prompt = f"{system_instruction}\n\nContext:\n{context}\n\nQuestion:\n{prompt}"
         
@@ -98,79 +108,122 @@ def execute_llm_generation(prompt: str, context: str, temperature: float, top_p:
 
 @app.get("/")
 async def root():
-    return {"message": "Agentic AI Assistant Backend running."}
+    return {"message": "Agentic AI Assistant Backend running with MLflow tracking."}
 
 @app.post("/chat", response_model=AssistantResponse)
 @limiter.limit("10/minute") 
 async def chat_endpoint(request: Request, body: QueryRequest):
-    try:
-        query = body.prompt
+    run_name = f"Query: {body.prompt[:25]}..."
+    
+    # MLflow tracking session per query
+    with mlflow.start_run(run_name=run_name):
+        start_time = time.time()
         
-        # 1. Initial RAG Retrieval
-        results = collection.query(query_texts=[query], n_results=2)
-        retrieved_chunks = results.get("documents", [[]])[0]
+        # Log input configuration parameters
+        mlflow.log_param("prompt_version", PROMPT_VERSION)
+        mlflow.log_param("temperature", body.temperature)
+        mlflow.log_param("top_p", body.top_p)
+        mlflow.log_param("model_name", "gemini-1.5-flash")
+        mlflow.log_param("input_query", body.prompt)
         
-        # TASK 3: Context Engineering - Compaction Baseline
-        accumulated_context = "Original RAG: " + " ".join(retrieved_chunks)
-        
-        # TASK 3: The Agentic Loop
-        max_steps = 3
-        step = 0
-        final_answer = ""
-        tool_outputs = []
+        try:
+            query = body.prompt
+            agent_trace = []
+            
+            # 1. Initial RAG Retrieval
+            results = collection.query(query_texts=[query], n_results=2)
+            retrieved_chunks = results.get("documents", [[]])[0]
+            accumulated_context = "Original RAG: " + " ".join(retrieved_chunks)
+            
+            # 2. Agentic Loop with Step Tracking
+            max_steps = 3
+            step = 0
+            final_answer = ""
+            tool_outputs = []
 
-        while step < max_steps:
-            step += 1
-            print(f"\n--- 🧠 Agent Loop Step {step} ---")
-            
-            agent_instruction = """You are an autonomous AI assistant. 
-            Review the provided context. 
-            - If you have the EXACT answer, start your response with: "ANSWER: "
-            - If you do NOT know the answer, you are FORBIDDEN from guessing or apologizing. You MUST start your response with: "SEARCH: " followed by your query.
-            Do not output both.
-            """
-            
-            print("Sending prompt to Gemini API... (waiting for response)")
-            ai_response = execute_llm_generation(
-                prompt=query, 
-                context=accumulated_context, 
-                temperature=body.temperature, 
-                top_p=body.top_p,
-                system_instruction=agent_instruction
+            while step < max_steps:
+                step += 1
+                
+                agent_instruction = """You are an autonomous AI assistant. 
+Review the provided context. 
+- If you have the EXACT answer, start your response with: "ANSWER: "
+- If you do NOT know the answer, you are FORBIDDEN from guessing or apologizing. You MUST start your response with: "SEARCH: " followed by your query.
+Do not output both.
+"""
+                ai_response = execute_llm_generation(
+                    prompt=query, 
+                    context=accumulated_context, 
+                    temperature=body.temperature, 
+                    top_p=body.top_p, 
+                    system_instruction=agent_instruction
+                )
+                
+                if ai_response.startswith("SEARCH:"):
+                    search_query = ai_response.replace("SEARCH:", "").strip()
+                    tool_result = mock_web_search(search_query)
+                    tool_outputs.append(tool_result)
+                    
+                    # Log step to trace
+                    agent_trace.append({
+                        "step": step,
+                        "action": "tool_call",
+                        "tool": "mock_web_search",
+                        "query": search_query,
+                        "result": tool_result
+                    })
+                    
+                    # Context Compaction: retain original RAG + latest search
+                    accumulated_context = f"Original RAG: {' '.join(retrieved_chunks)}\nLatest Web Search: {tool_result}"
+                    
+                elif ai_response.startswith("ANSWER:"):
+                    final_answer = ai_response.replace("ANSWER:", "").strip()
+                    agent_trace.append({
+                        "step": step,
+                        "action": "answer",
+                        "decision": "sufficient_evidence",
+                        "raw_response": ai_response
+                    })
+                    break
+                    
+                else:
+                    final_answer = ai_response
+                    agent_trace.append({
+                        "step": step,
+                        "action": "unformatted_exit",
+                        "raw_response": ai_response
+                    })
+                    break
+                    
+            if not final_answer:
+                final_answer = "Maximum iteration limit reached without conclusive evidence."
+                agent_trace.append({"step": step, "action": "max_steps_exceeded"})
+
+            latency = time.time() - start_time
+
+            # Log metrics to MLflow
+            mlflow.log_metric("iterations", step)
+            mlflow.log_metric("latency_seconds", latency)
+            mlflow.log_metric("tools_used_count", len(tool_outputs))
+            mlflow.log_metric("task_completed", 1 if final_answer and "conclusive evidence" not in final_answer else 0)
+
+            # Log execution trace as an MLflow artifact
+            mlflow.log_dict({"prompt_version": PROMPT_VERSION, "trace": agent_trace}, "agent_trace.json")
+
+            return AssistantResponse(
+                status="success",
+                response=final_answer,
+                retrieved_context=retrieved_chunks,
+                tool_output=" | ".join(tool_outputs) if tool_outputs else "No external tools used.",
+                structured_metadata={
+                    "temperature": body.temperature,
+                    "iterations_taken": step,
+                    "agent_pattern": "Single-agent loop with cross-source verification",
+                    "context_engineering": "Compaction",
+                    "mlflow_tracked": True
+                }
             )
-            print(f"Gemini replied with: {ai_response[:50]}...") # Print first 50 chars safely
-            
-            if ai_response.startswith("SEARCH:"):
-                search_query = ai_response.replace("SEARCH:", "").strip()
-                tool_result = mock_web_search(search_query)
-                tool_outputs.append(tool_result)
-                accumulated_context = f"Original RAG: {' '.join(retrieved_chunks)}\nLatest Web Search: {tool_result}"
-                
-            elif ai_response.startswith("ANSWER:"):
-                final_answer = ai_response.replace("ANSWER:", "").strip()
-                print("✅ Final answer found! Breaking loop.")
-                break
-                
-            else:
-                final_answer = ai_response
-                print("⚠️ Model did not format correctly. Breaking loop.")
-                break
-                
-        # If the loop maxes out before finding an answer
-        if not final_answer:
-            final_answer = "I reached my maximum number of thinking steps and could not complete the request."
 
-        return AssistantResponse(
-            status="success",
-            response=final_answer,
-            retrieved_context=retrieved_chunks,
-            tool_output=" | ".join(tool_outputs) if tool_outputs else "No external tools used.",
-            structured_metadata={
-                "temperature": body.temperature,
-                "iterations_taken": step,
-                "agent_pattern": "Single-agent loop with cross-source verification",
-                "context_engineering": "Compaction"
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error handled safely: {str(e)}")
+        except Exception as e:
+            mlflow.log_param("error", str(e))
+            mlflow.log_metric("task_completed", 0)
+            raise HTTPException(status_code=500, detail=f"Error handled safely: {str(e)}")
