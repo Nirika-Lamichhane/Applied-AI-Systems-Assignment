@@ -569,8 +569,3 @@ ONNX (Open Neural Network Exchange) was omitted from this implementation for arc
 * **Vector Store Separation:** The RAG pipeline relies on ChromaDB for local vector embeddings and retrieval. ChromaDB manages its own optimized embedded persistence layer, rendering deep learning model conversion formats unnecessary for similarity search.
 * **Focus on Application-Layer Resilience:** Production engineering requirements (Task 2) focus on application-layer reliability such as rate limiting (`slowapi`), retry policies (`tenacity`), fallback wrappers, and tool routing—rather than on-device hardware acceleration or local model quantization.
 
-
-# Wk16 refinement assignment
-
-"A fixed pipeline is insufficient for cross-source verification because the system cannot predict in advance whether the initial local RAG retrieval will contain enough evidence to answer the query, which makes a dynamic, conditional loop necessary to fetch missing information."
-
