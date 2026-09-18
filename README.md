@@ -568,3 +568,9 @@ ONNX (Open Neural Network Exchange) was omitted from this implementation for arc
 * **Cloud-Managed LLM Architecture:** Core text generation and reasoning are delegated to a managed cloud provider (`gemini-3.6-flash`) via the official Google GenAI SDK. Because model weights are hosted and served remotely by the provider rather than locally on the application server, there are no local neural network weight files to export, convert, or execute through an ONNX runtime.
 * **Vector Store Separation:** The RAG pipeline relies on ChromaDB for local vector embeddings and retrieval. ChromaDB manages its own optimized embedded persistence layer, rendering deep learning model conversion formats unnecessary for similarity search.
 * **Focus on Application-Layer Resilience:** Production engineering requirements (Task 2) focus on application-layer reliability such as rate limiting (`slowapi`), retry policies (`tenacity`), fallback wrappers, and tool routing—rather than on-device hardware acceleration or local model quantization.
+
+
+# Wk16 refinement assignment
+
+"A fixed pipeline is insufficient for cross-source verification because the system cannot predict in advance whether the initial local RAG retrieval will contain enough evidence to answer the query, which makes a dynamic, conditional loop necessary to fetch missing information."
+
