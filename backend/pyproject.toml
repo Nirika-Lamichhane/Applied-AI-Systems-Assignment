@@ -6,10 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "chromadb>=1.5.9",
-    "evidently[llm]>=0.7.23",
+    "evidently[llm]<0.5",
     "fastapi>=0.141.1",
     "google-generativeai>=0.8.6",
     "mlflow>=3.16.1",
+    "pandas>=3.0.6",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
     "requests>=2.34.2",
