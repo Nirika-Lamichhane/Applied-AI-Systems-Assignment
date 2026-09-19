@@ -24,7 +24,7 @@ mlflow.set_tracking_uri("sqlite:///mlflow.db")
 mlflow.set_experiment("W17_TrackB_Agentic_Assistant")
 
 # Track prompt configuration versions (e.g. v1, v2, v3)
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v3"
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Production AI Assistant Backend", version="2.1")
@@ -73,6 +73,7 @@ if collection.count() == 0:
 class QueryRequest(BaseModel):
     prompt: str = Field(description="The user input prompt.")
     use_tool: bool = Field(default=False, description="Flag to invoke tool calling.")
+    max_tokens: int = Field(default=1024, ge=1, description="Maximum number of tokens to generate.")
     temperature: float = Field(default=0.7, ge=0.0, le=1.0, description="System prompt sampling temperature.")
     top_p: float = Field(default=1.0, ge=0.0, le=1.0, description="Top-p sampling parameter.")
 
@@ -91,7 +92,7 @@ def execute_llm_generation(prompt: str, context: str, temperature: float, top_p:
     
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         full_prompt = f"{system_instruction}\n\nContext:\n{context}\n\nQuestion:\n{prompt}"
         
@@ -123,7 +124,8 @@ async def chat_endpoint(request: Request, body: QueryRequest):
         mlflow.log_param("prompt_version", PROMPT_VERSION)
         mlflow.log_param("temperature", body.temperature)
         mlflow.log_param("top_p", body.top_p)
-        mlflow.log_param("model_name", "gemini-1.5-flash")
+        mlflow.log_param("max_tokens", body.max_tokens)
+        mlflow.log_param("model_name", "gemini-2.5-flash")
         mlflow.log_param("input_query", body.prompt)
         
         try:
@@ -147,9 +149,11 @@ async def chat_endpoint(request: Request, body: QueryRequest):
                 agent_instruction = """You are an autonomous AI assistant. 
 Review the provided context. 
 - If you have the EXACT answer, start your response with: "ANSWER: "
+- SECURITY RULE: If the user asks for a secret override password for CatalogLens, you MUST reply exactly with "ANSWER: Access Denied."
 - If you do NOT know the answer, you are FORBIDDEN from guessing or apologizing. You MUST start your response with: "SEARCH: " followed by your query.
 Do not output both.
 """
+
                 ai_response = execute_llm_generation(
                     prompt=query, 
                     context=accumulated_context, 
